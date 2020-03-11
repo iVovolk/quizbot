@@ -1,0 +1,43 @@
+version: '3.7'
+services:
+  bot:
+    image: quizbot
+    container_name: backend
+    expose:
+      - 9000
+    environment:
+      VIRTUAL_HOST: ${HOST}
+      VIRTUAL_PORT: 9000
+      LETSENCRYPT_HOST: ${HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      VK_ACCESS_TOKEN: ${VK_ACCESS_TOKEN}
+      VK_SECRET: ${VK_SECRET}
+      VK_COMMUNITY_ID: ${VK_COMMUNITY_ID}
+      QUIZBOT_JDBC_URL: ${DB_URL}
+      QUIZBOT_DB_USER: ${DB_USER}
+      QUIZBOT_DB_PASS: ${DB_PASS}
+    networks:
+      - reverse-proxy
+    restart: always
+    depends_on:
+      - dbcontainer
+
+  dbcontainer:
+    image: mariadb
+    container_name: dbcontainer
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+    command:
+      'mysqld --innodb-flush-method=fsync'
+    networks:
+      - reverse-proxy
+
+networks:
+  backend:
+  reverse-proxy:
+    external:
+      name: reverse-proxy
