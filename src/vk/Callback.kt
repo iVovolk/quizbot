@@ -1,7 +1,6 @@
 package club.liefuck.vk
 
 import club.liefuck.Callback
-import club.liefuck.damerauLevenshteinDistance
 import club.liefuck.data.Storage
 import io.ktor.application.call
 import io.ktor.features.BadRequestException
@@ -22,7 +21,7 @@ fun Route.callback(secret: String, vkClient: VKClient, storage: Storage) {
         }
         call.respondText("ok")
         if (event.type == "message_new") {
-            eventHandler(event, vkClient, storage)
+            proxyHandler(event, vkClient, storage)
         }
     }
 }
@@ -30,7 +29,7 @@ fun Route.callback(secret: String, vkClient: VKClient, storage: Storage) {
 lateinit var adminUsers: List<Long>
 
 @KtorExperimentalAPI
-private suspend fun eventHandler(event: VkChatEvent, vkClient: VKClient, storage: Storage) {
+private suspend fun proxyHandler(event: VkChatEvent, vkClient: VKClient, storage: Storage) {
     if (!::adminUsers.isInitialized) {
         adminUsers = vkClient.getCommunityAdmins()
     }
@@ -50,10 +49,18 @@ private suspend fun eventHandler(event: VkChatEvent, vkClient: VKClient, storage
     }
 
     val command = extractCommand(event.body.message, keyboardAvailable)
+    val arguments = CommandHandlerArguments(
+        storage,
+        vkClient,
+        text,
+        command,
+        userId,
+        isAdmin
+    )
 
     when {
         command.startsWith(Commands.START.command) || command.startsWith(Commands.BEGIN.command) -> {
-            val username = vkClient.firstNameByUserId(userId)
+            val username = vkClient.getFirstNameByUserId(userId)
             val message = if (isAdmin) helloAdmin(username) else helloPlayer(username)
             vkClient.sendMessage(userId, message)
         }
@@ -66,110 +73,23 @@ private suspend fun eventHandler(event: VkChatEvent, vkClient: VKClient, storage
             vkClient.sendMessage(userId, help, keyboard)
         }
         command.startsWith(Commands.RULES.command) -> vkClient.sendMessage(userId, "Напоминаю правила.\n$rules")
-        command.startsWith(Commands.QUESTION.command) -> {
-            val message = if (isAdmin) {
-                val q = storage.findActiveQuestionForAdmin()
-                if (null == q) {
-                    noActiveQuestionAdmin
-                } else {
-                    activeQuestionFormatted(q)
-                }
-            } else {
-                if (!storage.playerIsAbleToGetQuestion(userId)) {
-                    weeklyLimitExceed
-                } else {
-                    val q = storage.findActiveQuestionForPlayer()
-                    if (null == q) {
-                        noActiveQuestion
-                    } else {
-                        storage.startGame(userId, q.id)
-                        "$questionPrefix\n${q.text}"
-                    }
-                }
-            }
-            vkClient.sendMessage(userId, message)
-        }
-        command.startsWith(Commands.ADD.command) -> {
-            if (!isAdmin) return
-            val parts = text
-                .removePrefix(command)
-                .split('%')
-                .map { it.trim() }
-                .filter { it != "" }
-            if (parts.count() != 3) {
-                vkClient.sendMessage(userId, errorWhileAddingQuestion)
-                return
-            }
-            val (question, answer, promocode) = parts
-            val message = if (storage.promocodeIsTaken(promocode)) {
-                promocodeIsTaken
-            } else {
-                val qId = storage.addQuestion(question, answer, promocode)
-                questionAddedMessage { qId.toString() }
-            }
-            vkClient.sendMessage(userId, message)
-        }
-        command.startsWith(Commands.DELETE.command) -> {
-            if (!isAdmin) return
-            val message = try {
-                val qId = text.removePrefix(command).trim().toInt()
-                if (!storage.questionExists(qId)) {
-                    vkClient.sendMessage(userId, questionWasNotFound)
-                    return
-                }
-                if (storage.questionHasAnswers(qId)) {
-                    vkClient.sendMessage(userId, questionHasAnswers)
-                    return
-
-                }
-                storage.deleteQuestion(qId)
-                questionHasBeenDeleted
-            } catch (e: NumberFormatException) {
-                questionIdWasNotRecognized
-            }
-            vkClient.sendMessage(userId, message)
-        }
-        command.startsWith(Commands.ANSWER.command) -> {
-            if (isAdmin) {
-                vkClient.sendMessage(userId, adminAnswering)
-                return
-            }
-            val answer = text.removePrefix(command).trim()
-            if (answer.isBlank()) {
-                vkClient.sendMessage(userId, emptyAnswer)
-                return
-            }
-            val da = storage.findDraftAnswer(userId)
-            if (null == da) {
-                vkClient.sendMessage(userId, answerWithNoQuestion)
-                return
-            }
-            if (da.askedAt + 30000 < System.currentTimeMillis()) {
-                storage.stopGame(da.id, answer)
-                vkClient.sendMessage(userId, timeIsUp)
-                return
-            }
-            val q = storage.findQuestionById(da.questionId)
-            if (null == q) {
-                storage.stopGame(da.id, answer)
-                vkClient.sendMessage(userId, unusualShit)
-                return
-            }
-            val message = when {
-                answer == q.answer -> {
-                    storage.stopGame(da.id, answer, true)
-                    correctAnswerMessage { q.promocode }
-                }
-                damerauLevenshteinDistance(answer, q.answer) <= 2 -> inaccurateAnswer
-                else -> {
-                    storage.stopGame(da.id, answer)
-                    incorrectAnswer
-                }
-            }
-            vkClient.sendMessage(userId, message)
-        }
+        command.startsWith(Commands.QUESTION.command) -> handleQuestion(arguments)
+        command.startsWith(Commands.ADD.command) -> handleQuestionAddition(arguments)
+        command.startsWith(Commands.DELETE.command) -> handleQuestionDeletion(arguments)
+        command.startsWith(Commands.ANSWER.command) -> handleAnswer(arguments)
+        command.startsWith(Commands.EDIT.command) -> handleEditing(arguments)
+        command.startsWith(Commands.WINNERS.command) -> handleWinners(arguments)
     }
 }
+
+internal data class CommandHandlerArguments(
+    val storage: Storage,
+    val vkClient: VKClient,
+    val text: String,
+    val command: String,
+    val userId: Long,
+    val isAdmin: Boolean
+)
 
 private fun extractCommand(message: Message, keyboardAvailable: Boolean): String {
     val command = message.parsedPayload?.command
@@ -179,7 +99,7 @@ private fun extractCommand(message: Message, keyboardAvailable: Boolean): String
     return message.text.trim().substringBefore(" ").toLowerCase()
 }
 
-enum class Commands(val command: String) {
+private enum class Commands(val command: String) {
     START("start"),
     BEGIN("/начать"),
     PING("/бот"),
@@ -190,5 +110,6 @@ enum class Commands(val command: String) {
     WINNERS("/угадали"),
     LIST("/список"),
     DELETE("/удалить"),
-    ADD("/добавить")
+    ADD("/добавить"),
+    EDIT("/править")
 }

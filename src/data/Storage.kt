@@ -1,17 +1,19 @@
 package club.liefuck.data
 
-import club.liefuck.startOfWeekInMillis
+import club.liefuck.twoMinutesInMillis
+import club.liefuck.weekInMillis
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import javax.sql.DataSource
 
-class Storage(dataSource: DataSource) {
+class Storage(dataSource: DataSource, isProd: Boolean = false) {
     init {
         Database.connect(dataSource)
 
         transaction {
-            addLogger(StdOutSqlLogger)
-
+            if (!isProd) {
+                addLogger(StdOutSqlLogger)
+            }
             SchemaUtils.create(Questions, Answers)
         }
     }
@@ -47,7 +49,10 @@ class Storage(dataSource: DataSource) {
     }
 
     fun findActiveQuestionForPlayer(): PlayerQuestion? = transaction {
-        val q = Questions.slice(Questions.text, Questions.id).select { Questions.isActive eq true }.firstOrNull()
+        val q = Questions.leftJoin(Answers)
+            .slice(Questions.text, Questions.id)
+            .select { Questions.isActive eq true and (Answers.questionId.isNull()) }
+            .firstOrNull()
         if (null == q) {
             null
         } else {
@@ -86,13 +91,45 @@ class Storage(dataSource: DataSource) {
         Answers.slice(Answers.id).select { Answers.questionId eq questionId }.count() > 0
     }
 
+    fun updateQuestion(questionId: Int, newText: String, newAnswer: String) = transaction {
+        Questions.update({ Questions.id eq questionId }) {
+            when {
+                newText.isBlank() -> it[answer] = newAnswer
+                newAnswer.isBlank() -> it[text] = newText
+                else -> {
+                    it[answer] = newAnswer
+                    it[text] = newText
+                }
+            }
+        }
+    }
+
+    //i was unable to make it a Map<Long, Long> even using filter{it.answeredAt != null}
+    fun getWinnersForActiveQuestion(): Map<Long, Long?> = transaction {
+        Answers.join(Questions, JoinType.INNER, additionalConstraint = { Questions.isActive eq true })
+            .slice(Answers.vkUserId, Answers.answeredAt)
+            .select { Answers.isCorrect eq true and (Answers.answeredAt.isNotNull()) }
+            .map { it[Answers.vkUserId] to it[Answers.answeredAt] }
+            .toMap()
+    }
+
+    //i was unable to make it a Map<Long, Long> even using filter{it.answeredAt != null}
+    fun getWinnersByQuestionId(questionId: Int): Map<Long, Long?> = transaction {
+        Answers.slice(Answers.vkUserId, Answers.answeredAt)
+            .select { Answers.isCorrect eq true and (Answers.answeredAt.isNotNull()) and (Answers.questionId eq questionId) }
+            .map { it[Answers.vkUserId] to it[Answers.answeredAt] }
+            .toMap()
+    }
+
     fun promocodeIsTaken(code: String): Boolean = transaction {
         null !== Questions.slice(Questions.id).select { Questions.code eq code }.firstOrNull()
     }
 
     fun playerIsAbleToGetQuestion(playerId: Long): Boolean = transaction {
-        val startOfWeekTS = startOfWeekInMillis()
-        Answers.select { Answers.askedAt greater startOfWeekTS and (Answers.vkUserId eq playerId) }.count() == 0
+        val nowInMillis = System.currentTimeMillis()
+        Answers.select {
+            Answers.vkUserId eq playerId and ((Answers.askedAt + weekInMillis) greaterEq nowInMillis)
+        }.count() == 0
     }
 
     fun startGame(playerId: Long, questionId: Int) = transaction {
@@ -112,9 +149,13 @@ class Storage(dataSource: DataSource) {
     }
 
     fun findDraftAnswer(playerId: Long): DraftAnswer? = transaction {
-        val startOfWeekTS = startOfWeekInMillis()
+        val nowInMillis = System.currentTimeMillis()
         val a = Answers.slice(Answers.id, Answers.questionId, Answers.askedAt)
-            .select { Answers.vkUserId eq playerId and (Answers.answeredAt.isNull()) and (Answers.askedAt greater startOfWeekTS) }
+            .select {
+                Answers.vkUserId eq playerId and
+                        (Answers.answeredAt.isNull()) and
+                        ((Answers.askedAt + twoMinutesInMillis) greaterEq nowInMillis)
+            }
             .limit(1)
             .sortedByDescending { Answers.id }
             .singleOrNull()

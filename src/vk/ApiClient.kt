@@ -17,7 +17,12 @@ import io.ktor.http.formUrlEncode
 import io.ktor.util.KtorExperimentalAPI
 import kotlin.random.Random
 
-class VKClient(private val token: String, private val communityId: String, private val version: String = "5.103") {
+class VKClient(
+    private val token: String,
+    private val communityId: String,
+    private val version: String = "5.103",
+    isProd: Boolean = false
+) {
     private val baseEndpoint = "https://api.vk.com/method/"
 
     @KtorExperimentalAPI
@@ -26,19 +31,28 @@ class VKClient(private val token: String, private val communityId: String, priva
             install(JsonFeature) {
                 serializer = GsonSerializer()
             }
-            install(Logging) {
-                logger = Logger.DEFAULT
-                level = LogLevel.ALL
+            if (!isProd) {
+                install(Logging) {
+                    logger = Logger.DEFAULT
+                    level = LogLevel.ALL
+                }
             }
         }
     }
 
 
     @KtorExperimentalAPI
-    suspend fun firstNameByUserId(userId: Long): String? {
+    suspend fun getFirstNameByUserId(userId: Long): String? {
         val params = listOf("user_id" to userId.toString())
         val info = makeGetRequest<Response<List<UserInfo>>>(params, "users.get")
         return info.response.firstOrNull()?.firstName
+    }
+
+    @KtorExperimentalAPI
+    suspend fun getFullNamesByIds(ids: Set<Long>): Map<Long, String> {
+        val params = listOf("user_ids" to ids.joinToString(","))
+        val usersInfo = makeGetRequest<Response<List<UserInfo>>>(params, "users.get").response
+        return usersInfo.map { it.id to "${it.firstName} ${it.lastName} (${it.id})" }.toMap()
     }
 
     @KtorExperimentalAPI
@@ -88,12 +102,12 @@ class VKClient(private val token: String, private val communityId: String, priva
     }
 }
 
-data class Response<Any>(val response: Any)
-data class UserInfo(
+internal data class Response<Any>(val response: Any)
+internal data class UserInfo(
     val id: Long,
     @SerializedName("first_name") val firstName: String,
     @SerializedName("last_name") val lastName: String
 )
 
-data class PaginatedResponse<T>(val count: Int, val items: List<T>)
-data class CommunityManager(val id: Long, val role: String)
+internal data class PaginatedResponse<T>(val count: Int, val items: List<T>)
+internal data class CommunityManager(val id: Long, val role: String)

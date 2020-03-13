@@ -52,7 +52,7 @@ fun Application.module() {
     ds.username = dbConfig.property("user").getString()
     ds.password = dbConfig.property("password").getString()
     val storage by lazy {
-        Storage(ds)
+        Storage(ds, isProd)
     }
 
     routing {
@@ -63,5 +63,7 @@ fun Application.module() {
 @KtorExperimentalAPI
 val Application.envKind
     get() = environment.config.property("ktor.environment").getString()
-val Application.isDev get() = envKind == "dev"
-val Application.isProd get() = envKind != "dev"
+
+@KtorExperimentalAPI
+val Application.isProd
+    get() = envKind == "prod"

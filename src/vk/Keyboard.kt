@@ -39,14 +39,14 @@ data class Button(val action: Action, val color: String)
 data class Action(val type: String, val label: String, val payload: Payload)
 data class Payload(val command: String)
 
-enum class Color(val type: String) {
+private enum class Color(val type: String) {
     PRIMARY("primary"),
     SECONDARY("secondary"),
     NEGATIVE("negative"),
     POSITIVE("positive")
 }
 
-enum class ActionType(val type: String) {
+private enum class ActionType(val type: String) {
     TEXT("text"),
     OPEN_LINK("open_link"),
     LOCATION("location"),

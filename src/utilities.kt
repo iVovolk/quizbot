@@ -1,21 +1,11 @@
 package club.liefuck
 
-import java.util.*
-
-
 const val utf8Collate = "utf8mb4_unicode_520_ci"
 
-fun startOfWeekInMillis(): Long {
-    val cal = Calendar.getInstance()
-    cal[Calendar.HOUR_OF_DAY] = 0
-    cal[Calendar.DAY_OF_WEEK] = cal.firstDayOfWeek
+const val weekInMillis = (7 * 24 * 60 * 60 * 1000).toLong()
+const val thirtySecInMillis = (30 * 1000).toLong()
+const val twoMinutesInMillis = (2 * 60 * 1000).toLong()
 
-    cal.clear(Calendar.MINUTE)
-    cal.clear(Calendar.SECOND)
-    cal.clear(Calendar.MILLISECOND)
-
-    return cal.timeInMillis
-}
 
 //stolen from https://github.com/jdereg/java-util
 fun damerauLevenshteinDistance(source: CharSequence?, target: CharSequence?): Int {
