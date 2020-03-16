@@ -166,12 +166,16 @@ internal suspend fun handleWinners(arguments: CommandHandlerArguments) {
         arguments.storage.getWinnersByQuestionId(qId)
     }
     val fullNames = arguments.vkClient.getFullNamesByIds(winners.keys)
-    val message = fullNames.map {
-        //null check is useless because of the query condition but required because
-        //i found no way to force null column to became a non-null map value
-        //@see club.liefuck.data.Storage.getWinnersByQuestionId
-        it.value + winners[it.key]?.let { ts -> tsAsDateString(ts) }
-    }.joinToString(", ", winnersListPrefix)
+    val message = if (fullNames.isEmpty()) {
+        fullNames.map {
+            //null check is useless because of the query condition but required because
+            //i found no way to force null column to became a non-null map value
+            //@see club.liefuck.data.Storage.getWinnersByQuestionId
+            it.value + winners[it.key]?.let { ts -> tsAsDateString(ts) }
+        }.joinToString(", ", winnersListPrefix)
+    } else {
+        nobodyAnsweredCorrectly
+    }
     arguments.vkClient.sendMessage(arguments.userId, message)
 }
 
