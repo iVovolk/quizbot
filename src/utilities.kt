@@ -1,10 +1,16 @@
 package club.liefuck
 
+import java.text.SimpleDateFormat
+
 const val utf8Collate = "utf8mb4_unicode_520_ci"
 
 const val weekInMillis = (7 * 24 * 60 * 60 * 1000).toLong()
 const val thirtySecInMillis = (30 * 1000).toLong()
 const val twoMinutesInMillis = (2 * 60 * 1000).toLong()
+
+fun tsAsDateString(ts: Long): String {
+    return SimpleDateFormat("dd.MM.yyyy HH:mm").format(ts)
+}
 
 
 //stolen from https://github.com/jdereg/java-util

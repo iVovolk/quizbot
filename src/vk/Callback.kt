@@ -65,20 +65,21 @@ private suspend fun proxyHandler(event: VkChatEvent, vkClient: VKClient, storage
             vkClient.sendMessage(userId, message)
         }
         command.startsWith(Commands.PING.command) -> {
-            val message = "Я тут. " + if (isAdmin) adminCommands else playerCommands
+            val message = pingPrefix + if (isAdmin) adminCommands else playerCommands
             vkClient.sendMessage(userId, message, keyboard)
         }
         command.startsWith(Commands.HELP.command) -> {
             val help = if (isAdmin) adminHelp else playerHelp
             vkClient.sendMessage(userId, help, keyboard)
         }
-        command.startsWith(Commands.RULES.command) -> vkClient.sendMessage(userId, "Напоминаю правила.\n$rules")
+        command.startsWith(Commands.RULES.command) -> vkClient.sendMessage(userId, "$rulesPrefix$rules")
         command.startsWith(Commands.QUESTION.command) -> handleQuestion(arguments)
         command.startsWith(Commands.ADD.command) -> handleQuestionAddition(arguments)
         command.startsWith(Commands.DELETE.command) -> handleQuestionDeletion(arguments)
         command.startsWith(Commands.ANSWER.command) -> handleAnswer(arguments)
         command.startsWith(Commands.EDIT.command) -> handleEditing(arguments)
         command.startsWith(Commands.WINNERS.command) -> handleWinners(arguments)
+        command.startsWith(Commands.LIST.command) -> handleList(arguments)
     }
 }
 

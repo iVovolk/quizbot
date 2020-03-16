@@ -2,8 +2,9 @@ package club.liefuck.vk
 
 import club.liefuck.damerauLevenshteinDistance
 import club.liefuck.thirtySecInMillis
+import club.liefuck.tsAsDateString
 import io.ktor.util.KtorExperimentalAPI
-import java.text.SimpleDateFormat
+import kotlin.math.absoluteValue
 
 @KtorExperimentalAPI
 internal suspend fun handleQuestion(arguments: CommandHandlerArguments) {
@@ -169,7 +170,30 @@ internal suspend fun handleWinners(arguments: CommandHandlerArguments) {
         //null check is useless because of the query condition but required because
         //i found no way to force null column to became a non-null map value
         //@see club.liefuck.data.Storage.getWinnersByQuestionId
-        it.value + if (winners[it.key] != null) SimpleDateFormat("dd.MM.yyyy HH:mm").format(winners[it.key]) else ""
-    }.joinToString(", ", "Правильно ответили: ")
+        it.value + winners[it.key]?.let { ts -> tsAsDateString(ts) }
+    }.joinToString(", ", winnersListPrefix)
+    arguments.vkClient.sendMessage(arguments.userId, message)
+}
+
+@KtorExperimentalAPI
+internal suspend fun handleList(arguments: CommandHandlerArguments) {
+    if (!arguments.isAdmin) return
+    val stringOffset = arguments.text.removePrefix(arguments.command).trim()
+    val limit = 10;
+    val page = try {
+        val page = stringOffset.toInt().absoluteValue
+        if (page == 0) 1 else page
+    } catch (e: NumberFormatException) {
+        1
+    }
+    val offset = if (page == 1) 0 else page * limit
+    val questions = arguments.storage.getQuestions(limit, offset)
+    val message = if (questions.isEmpty()) {
+        noQuestionsFound
+    } else {
+        questions.joinToString("\n", "$questionsListPrefix$page:\n") {
+            questionFormatted(it)
+        }
+    }
     arguments.vkClient.sendMessage(arguments.userId, message)
 }

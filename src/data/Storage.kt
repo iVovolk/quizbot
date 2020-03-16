@@ -104,6 +104,18 @@ class Storage(dataSource: DataSource, isProd: Boolean = false) {
         }
     }
 
+    fun getQuestions(limit: Int = 10, offset: Int): List<Question> = transaction {
+        Questions.selectAll().limit(limit, offset).sortedByDescending { Questions.id }.map {
+            Question(
+                it[Questions.id].value,
+                it[Questions.text],
+                it[Questions.answer],
+                it[Questions.code],
+                it[Questions.addedAt]
+            )
+        }
+    }
+
     //i was unable to make it a Map<Long, Long> even using filter{it.answeredAt != null}
     fun getWinnersForActiveQuestion(): Map<Long, Long?> = transaction {
         Answers.join(Questions, JoinType.INNER, additionalConstraint = { Questions.isActive eq true })

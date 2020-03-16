@@ -29,10 +29,7 @@ data class Message(
     //this is needed because VK sends payload as a string not as an object thus it could't be deserialized automatically
     val parsedPayload: Payload?
         get() {
-            if (payload == null) {
-                return null
-            }
-            return Gson().fromJson(payload, Payload::class.java)
+            return payload?.let { Gson().fromJson(it, Payload::class.java) }
         }
 }
 

@@ -1,6 +1,7 @@
 package club.liefuck.vk
 
 import club.liefuck.data.Question
+import club.liefuck.tsAsDateString
 import java.text.SimpleDateFormat
 
 const val answerWithNoQuestion = "Вижу ответ, но не помню, чтобы что-то у тебя спрашивал.\n¯\\_(ツ)_/¯"
@@ -36,6 +37,11 @@ const val errorWhileEditingQuestion = """
 const val bothQuestionFieldsAreBlank = "Ха-ха. Пустой вопрос - пустой ответ. Умно. Башка у тебя пустая."
 const val questionIdWasNotRecognized = "Не понял id вопроса, там число длолжно быть, а не вот это вот."
 const val questionHasBeenUpdated = "Гтово, босс, вопрос обновлен."
+const val questionsListPrefix = "Список вопросов от новых к старым. Стр."
+const val noQuestionsFound = "Страница пуста, как твой загран или как сердце твоей бывшей"
+const val winnersListPrefix = "Правильно ответили: "
+const val rulesPrefix = "Напоминаю правила.\n"
+const val pingPrefix = "Я тут. "
 
 const val adminCommands = """
 Список команд, доступных для пользователей сообщества с ролями Создатель или Администратор:
@@ -93,6 +99,10 @@ fun activeQuestionFormatted(q: Question): String {
         Промокод: ${q.promocode}
         Добавлен: ${SimpleDateFormat("dd.MM.yyyy HH:mm").format(q.addedAt)}
     """.trimIndent()
+}
+
+fun questionFormatted(q: Question): String {
+    return "${q.id}: ${q.text} - ${q.answer}. Код: ${q.promocode}. Добален: ${tsAsDateString(q.addedAt)}"
 }
 
 fun helloPlayer(userName: String?): String {

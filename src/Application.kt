@@ -26,7 +26,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 @KtorExperimentalAPI
 fun Application.module() {
     install(DefaultHeaders) {
-        header("X-Engine", "Ktor") // will send this header with each response
     }
     install(ContentNegotiation) {
         gson {
